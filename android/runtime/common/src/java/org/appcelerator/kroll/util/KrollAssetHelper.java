@@ -73,8 +73,13 @@ public class KrollAssetHelper
 				Log.e(TAG, "AssetManager is null, can't read asset: " + path);
 				return null;
 			}
-
-			InputStream in = assetManager.open(path);
+      InputStream in;
+      //[TiShadow] for loading from private data
+      if (path.indexOf("/data/data") == 0) {
+        in = new FileInputStream(path);
+      } else {
+			  in = assetManager.open(path);
+      }
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			byte buffer[] = new byte[1024];
 			int count = 0;

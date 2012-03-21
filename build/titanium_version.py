@@ -1,3 +1,3 @@
-version = '2.0.0'
+version = 'tishadow'
 module_apiversion = '2'
 

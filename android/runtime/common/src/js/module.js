@@ -197,16 +197,23 @@ Module.prototype.require = function (request, context, useCache) {
 	if (externalBinding) {
 		return this.loadExternalModule(request, externalBinding, context);
 	}
-
-	var resolved = resolveFilename(request, this);
-	var id = resolved[0];
-	var filename = resolved[1];
+  
+  var id, filename;
+  // [TiShadow] Cowboy loading if using an appdata url
+  if (request.indexOf("/data/data") === 0 ) {
+    id = filename = request;
+  } else {
+	  var resolved = resolveFilename(request, this);
+	  id = resolved[0];
+  	filename = resolved[1];
+  }
 
 	if (kroll.DBG) {
 		kroll.log(TAG, 'Loading module: ' + request + ' -> ' + filename);
 	}
 
-	if (useCache) {
+  // [TiShadow] don't cache TiShadow modules
+	if (useCache && (request.indexOf("/data/data") === -1 )) {
 		var cachedModule = Module.cache[filename];
 		if (cachedModule) {
 			return cachedModule.exports;
@@ -217,7 +224,8 @@ Module.prototype.require = function (request, context, useCache) {
 	var module = new Module(id, this, context);
 	module.load(filename);
 
-	if (useCache) {
+   // [TiShadow] don't cache TiShadow modules
+	if (useCache && (request.indexOf("/data/data") === -1 )) {
 		// Cache the module for future requests.
 		Module.cache[filename] = module;
 	}
@@ -229,7 +237,13 @@ Module.prototype.require = function (request, context, useCache) {
 // Returns the result of the executed script.
 Module.prototype._runScript = function (source, filename) {
 	var self = this;
-	var url = "app://" + filename;
+	var url;
+  // [TiShadow] Cowboy loading if using an appdata url
+  if (filename.indexOf("/data/data") === 0) {
+    url = filename
+  } else {
+    url = "app://" + filename;
+  }
 
 	function require(path, context) {
 		return self.require(path, context);
