@@ -1,7 +1,6 @@
 define(["Ti/_/Evented", "Ti/_/lang"], function(Evented, lang) {
 
 	var storageKey = "ti:properties",
-		undef,
 		types = {
 			"Bool": function(value) {
 				return !!value;
@@ -40,7 +39,10 @@ define(["Ti/_/Evented", "Ti/_/lang"], function(Evented, lang) {
 		});
 
 	function getStorage(prop) {
-		storage || (storage = JSON.parse(localStorage.getItem(storageKey)) || {});
+		if (!storage) {
+			var value = localStorage.getItem(storageKey);
+			storage = (require.is(value, "String") && JSON.parse(value)) || {};
+		}
 		if (prop) {
 			return storage[prop];
 		}
@@ -49,13 +51,13 @@ define(["Ti/_/Evented", "Ti/_/lang"], function(Evented, lang) {
 
 	function getProp(prop, type, defaultValue) {
 		var value = getStorage(prop);
-		return value === undef ? defaultValue || null : types[type] ? types[type](value) : value;
+		return value === void 0 ? defaultValue || null : types[type] ? types[type](value) : value;
 	}
 
 	function setProp(prop, type, value) {
 		if (prop) {
 			getStorage();
-			if (value === undef) {
+			if (value === void 0) {
 				delete storage[prop];
 			} else {
 				storage[prop] = types[type] ? types[type](value) : value;

@@ -2,9 +2,8 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/UI/View", "Ti/_/dom", "Ti/_/css", "Ti/_
 	function(declare, lang, View, dom, css, style, UI) {
 
 	var setStyle = style.set,
-		undef,
 		isDef = lang.isDef,
-		imagePrefix = "themes/titanium/UI/TableViewRow/"
+		imagePrefix = "themes/" + require.config.ti.theme + "/UI/TableViewRow/"
 		checkImage = imagePrefix + "check.png",
 		childImage = imagePrefix + "child.png",
 		detailImage = imagePrefix + "detail.png";
@@ -29,7 +28,8 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/UI/View", "Ti/_/dom", "Ti/_/css", "Ti/_
 
 			this._defaultControl.add(this._titleLabel = UI.createLabel({
 				width: UI.INHERIT,
-				height: UI.INHERIT 
+				height: UI.INHERIT,
+				wordWrap: false
 			}));
 
 			this._defaultControl.add(this._rightImageView = UI.createImageView({
@@ -44,7 +44,7 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/UI/View", "Ti/_/dom", "Ti/_/css", "Ti/_
 
 		_defaultHeight: UI.SIZE,
 		
-		_tableRowHeight: undef,
+		_tableRowHeight: void 0,
 		
 		_tableViewSection: null,
 		
@@ -65,7 +65,7 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/UI/View", "Ti/_/dom", "Ti/_/css", "Ti/_
 		},
 
 		properties: {
-			className: undef,
+			className: void 0,
 			color: {
 				set: function(value) {
 					this._titleLabel.color = value;
@@ -117,7 +117,7 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/UI/View", "Ti/_/dom", "Ti/_/css", "Ti/_
 					return value;
 				}
 			},
-			selectedColor: undef,
+			selectedColor: void 0,
 			title: {
 				set: function(value) {
 					this._titleLabel.text = value;

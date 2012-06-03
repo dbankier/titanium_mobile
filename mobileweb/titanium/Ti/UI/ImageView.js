@@ -2,7 +2,6 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/_/style", "Ti/_/UI/Widget", "Ti/UI"],
 	function(declare, lang, style, Widget, UI) {
 
 	var setStyle = style.set,
-		undef,
 		on = require.on,
 		InternalImageView = declare(Widget, {
 
@@ -76,7 +75,7 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/_/style", "Ti/_/UI/Widget", "Ti/UI"],
 						if (value) {
 							disp = "inherit";
 							on(node, "load", this, function() {
-								this._triggerLayout();
+								this.container._triggerLayout();
 								this.onload && this.onload();
 							});
 							on(node, "error", onerror);
@@ -91,21 +90,22 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/_/style", "Ti/_/UI/Widget", "Ti/UI"],
 			}
 		});
 
-	function createImage(src, onload, onerror) {
-		switch (src && src.declaredClass) {
-			case "Ti.Filesystem.File":
-				src = src.read();
-			case "Ti.Blob":
-				src = src.toString();
-		}
-		return new InternalImageView({
-			onload: onload,
-			onerror: onerror,
-			src: src
-		});
-	}
-
 	return declare("Ti.UI.ImageView", Widget, {
+
+		_createImage: function(src, onload, onerror) {
+			switch (src && src.declaredClass) {
+				case "Ti.Filesystem.File":
+					src = src.read();
+				case "Ti.Blob":
+					src = src.toString();
+			}
+			return new InternalImageView({
+				onload: onload,
+				onerror: onerror,
+				src: src,
+				container: this
+			});
+		},
 
 		_defaultWidth: UI.SIZE,
 
@@ -202,8 +202,8 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/_/style", "Ti/_/UI/Widget", "Ti/UI"],
 			image: {
 				set: function(value) {
 					this._removeAllChildren();
-					this._images = undef;
-					this.add(createImage(value, function() {
+					this._images = void 0;
+					this.add(this._createImage(value, function() {
 						this.fireEvent("load", {
 							state: "image"
 						});
@@ -216,14 +216,14 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/_/style", "Ti/_/UI/Widget", "Ti/UI"],
 
 			images: {
 				set: function(value) {
-					var imgs = undef,
+					var imgs = void 0,
 						counter = 0,
 						errored = 0;
 					this._removeAllChildren();
 					if (require.is(value, "Array")) {
 						imgs = [];
 						value.forEach(function(val) {
-							var img = createImage(val, function() {
+							var img = this._createImage(val, function() {
 								!errored && ++counter === value.length && this.fireEvent("load", {
 									state: "image"
 								});

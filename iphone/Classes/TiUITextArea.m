@@ -28,7 +28,7 @@
 {
 	if (textWidgetView==nil)
 	{
-		textWidgetView = [[UITextView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
+		textWidgetView = [[UITextView alloc] initWithFrame:CGRectZero];
 		((UITextView *)textWidgetView).delegate = self;
 		[self addSubview:textWidgetView];
 		[(UITextView *)textWidgetView setContentInset:UIEdgeInsetsZero];
@@ -151,27 +151,36 @@
 	return TRUE;
 }
 
+/*
+Text area constrains the text event though the content offset and edge insets are set to 0 
+*/
+#define TXT_OFFSET 20
 -(CGFloat)contentWidthForWidth:(CGFloat)value
 {
-    if (![self hasText]) {
-        return 0.0;
-    }
     UITextView* ourView = (UITextView*)[self textWidgetView];
     NSString* txt = ourView.text;
     //sizeThatFits does not seem to work properly.
-    //Adding a constant 10 for now since the value returned is too small
-    return [txt sizeWithFont:ourView.font forWidth:value lineBreakMode:UILineBreakModeWordWrap].width+10;
+    CGFloat txtWidth = [txt sizeWithFont:ourView.font constrainedToSize:CGSizeMake(value, 1E100) lineBreakMode:UILineBreakModeWordWrap].width;
+    if (value - txtWidth >= TXT_OFFSET) {
+        return (txtWidth + TXT_OFFSET);
+    }
+    return txtWidth + 2 * self.layer.borderWidth;
 }
 
 -(CGFloat)contentHeightForWidth:(CGFloat)value
 {
-    if (![self hasText]) {
-        return 0.0;
+    CGFloat constrainedWidth = value - TXT_OFFSET;
+    if (constrainedWidth < 0) {
+        constrainedWidth = 0;
     }
     UITextView* ourView = (UITextView*)[self textWidgetView];
     NSString* txt = ourView.text;
+    if (txt.length == 0) {
+        txt = @" ";
+    }
     //sizeThatFits does not seem to work properly
-    return [txt sizeWithFont:ourView.font forWidth:value lineBreakMode:UILineBreakModeWordWrap].height;
+    CGFloat txtHeight = [txt sizeWithFont:ourView.font constrainedToSize:CGSizeMake(constrainedWidth, 1E100) lineBreakMode:UILineBreakModeWordWrap].height;
+    return txtHeight + 2 * self.layer.borderWidth;
 }
 
 - (void)scrollViewDidScroll:(id)scrollView

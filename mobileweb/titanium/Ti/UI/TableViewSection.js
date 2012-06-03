@@ -2,8 +2,7 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/_/UI/Widget", "Ti/_/style","Ti/UI/Mobil
 	function(declare, lang, Widget, style, TableViewSeparatorStyle, UI) {
 	
 	var is = require.is,
-		setStyle = style.set,
-		undef;
+		setStyle = style.set;
 
 	return declare("Ti.UI.TableViewSection", Widget, {
 		
@@ -62,13 +61,13 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/_/UI/Widget", "Ti/_/style","Ti/UI/Mobil
 			if (this._tableView) {
 				// Update the row information
 				var rows = this._rows.children,
-					tableView = this._tableView; 
+					tableView = this._tableView,
 					rowsData = this.constants.rows = [];
 				for (var i = 1; i < rows.length; i += 2) {
 					var row = rows[i];
 					row._defaultHeight = tableView.rowHeight;
-					setStyle(row.domNode, "minHeight", tableView.minRowHeight);
-					setStyle(row.domNode, "maxHeight", tableView.maxRowHeight);
+					row._minHeight = tableView.minRowHeight;
+					row._maxHeight = tableView.maxRowHeight;
 					rowsData.push(row);
 				}
 				
@@ -146,7 +145,7 @@ define(["Ti/_/declare", "Ti/_/lang", "Ti/_/UI/Widget", "Ti/_/style","Ti/UI/Mobil
 		},
 		
 		constants: {
-			rows: undef
+			rows: void 0
 		},
 					
 		properties: {

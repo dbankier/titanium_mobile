@@ -18,6 +18,7 @@ define(
 
 	var global = window,
 		cfg = require.config,
+		deployType = cfg.app.deployType,
 		ver = cfg.ti.version,
 		is = require.is,
 		each = require.each,
@@ -27,7 +28,6 @@ define(
 		unloaded,
 		showingError,
 		waiting = [],
-		undef,
 		Ti = lang.setObject("Ti", Evented, {
 			constants: {
 				buildDate: cfg.ti.buildDate,
@@ -70,7 +70,7 @@ define(
 		loadAppjs = Ti.deferStart();
 
 	// add has() tests
-	has.add("devmode", cfg.deployType === "development");
+	has.add("devmode", deployType === "development");
 
 	// Object.defineProperty() shim
 	if (!has("object-defineproperty")) {
@@ -181,7 +181,7 @@ define(
 	}
 
 	// console.*() shim	
-	console === undef && (console = {});
+	console === void 0 && (console = {});
 
 	// make sure "log" is always at the end
 	each(["debug", "info", "warn", "error", "log"], function (c) {
@@ -238,7 +238,7 @@ define(
 					return escapeString(it);
 				}
 				if (objtype === "function" || objtype === "undefined") {
-					return undef;
+					return void 0;
 				}
 	
 				// short-circuit for objects that support "json" serialization
@@ -354,7 +354,7 @@ define(
 				win.add(view = UI.createView({ height: "12%" }));
 				view.add(button = UI.createButton({ title: "Dismiss" }));
 				win.addEventListener("close", function() { win.destroy(); });
-				button.addEventListener("click", function() {
+				button.addEventListener("singletap", function() {
 					win.animate({
 						duration: 500,
 						top: "100%"
@@ -364,17 +364,19 @@ define(
 					});
 				});
 				makeLabel("Error messages will only be displayed during development. When your app is packaged for final distribution, no error screen will appear. Test your code!", "28%", "#000", "10pt");
-
-				win.addEventListener("postlayout", function() {
-					win.animate({
-						duration: 500,
-						top: 0
-					}, function() {
-						win.top = 0;
-						win.height = "100%";
-					});
+				
+				on.once(win,"postlayout", function() {
+					setTimeout(function() {
+						win.animate({
+							duration: 500,
+							top: 0
+						}, function() {
+							win.top = 0;
+							win.height = "100%";
+						});
+					}, 100);
 				});
-
+				
 				win.open();
 			}
 		});
@@ -394,7 +396,7 @@ define(
 					app_name: App.name,
 					oscpu: 1,
 					mac_addr: null,
-					deploytype: cfg.deployType,
+					deploytype: deployType,
 					ostype: Platform.osname,
 					osarch: null,
 					app_id: App.id,
@@ -407,7 +409,7 @@ define(
 			// app start event
 			analytics.add("ti.start", "ti.start", {
 				tz: (new Date()).getTimezoneOffset(),
-				deploytype: cfg.deployType,
+				deploytype: deployType,
 				os: Platform.osname,
 				osver: Platform.ostype,
 				version: cfg.tiVersion,

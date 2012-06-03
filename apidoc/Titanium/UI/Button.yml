@@ -76,7 +76,9 @@ properties:
         Background image for the button in its normal state, specified as a local file path or URL. 
     description: |
         Also sets the background image for the other button states (disabled, focused, selected), 
-        unless they've been specified explicitly.
+        unless they've been specified explicitly. On iOS, if backgroundDisabledImage is unset, the
+        image will appear faded to indicate being disabled. Also on iOS, if backgroundSelectedImage
+        is unset, the image will be darkened to indicate being selected.
     type: String
   - name: backgroundDisabledImage
     summary: |
@@ -84,7 +86,7 @@ properties:
         or URL. 
     description: |
         Also sets the background image for the other button states (normal, focused, selected), 
-        unless they've been specified explicitly.
+        unless they've been specified explicitly, except for iOS, which requires a backgroundImage.
     type: String
   - name: backgroundFocusedImage
     summary: |
@@ -92,14 +94,14 @@ properties:
         or URL. 
     description: |
         Focusable must be true for normal views. Sets the background image for the focused 
-        state only.
+        state only. For iOS, since there is not a trackball, this does nothing.
     type: String
   - name: backgroundSelectedImage
     summary: |
         Background image for the button in its selected state, specified as a local file 
         path or URL. 
     description: |
-        Focusable must be true for normal views. Sets the background image for the selected 
+        On Android, Focusable must be true in order to be selected. Sets the background image for the selected 
         state only.
     type: String
   - name: color
@@ -116,9 +118,7 @@ properties:
     summary: Image to display on the button, specified as a local
         path, URL or (on iOS only) a `Blob`.
     description: |
-        On iOS and Mobile Web, the image is displayed to the left of the title. 
-        
-        On Android, this property is identical to `backgroundImage`.
+        The image is displayed to the left of the title.
 
         Support for using <Titanium.Blob> for this property is only available on iOS.
     type: [String, Titanium.Blob]
@@ -157,7 +157,7 @@ properties:
         [TEXT_VERTICAL_ALIGNMENT_TOP](Titanium.UI.TEXT_VERTICAL_ALIGNMENT_TOP).
     type: [Number,String]
     default: Titanium.UI.TEXT_VERTICAL_ALIGNMENT_CENTER
-    platforms: [android]
+    platforms: [android, mobileweb]
 examples:
   - title: Simple Button Example
     example: |

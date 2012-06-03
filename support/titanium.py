@@ -157,7 +157,6 @@ def create_mobileweb_project(project_dir, osname, args):
 	name = get_required(args, 'name')
 	validate_project_name(name)
 	appid = get_required(args, 'id')
-	android_sdk = get_android_sdk(args)
 	args = [script, name, appid, project_dir, osname]
 	retcode = fork(args, True)
 	if retcode == 0:
@@ -422,7 +421,7 @@ def fastdev(args):
 def help(args=[],suppress_banner=False):
 	if not suppress_banner:
 		print "Appcelerator Titanium"
-		print "Copyright (c) 2010-2011 by Appcelerator, Inc."
+		print "Copyright (c) 2010-2012 by Appcelerator, Inc."
 		print
 	
 	if len(args)==0:

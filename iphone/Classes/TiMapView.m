@@ -25,7 +25,6 @@
 		map.delegate = nil;
 		RELEASE_TO_NIL(map);
 	}
-	RELEASE_TO_NIL(pendingAnnotationSelection);
     if (mapLine2View) {
         CFRelease(mapLine2View);
         mapLine2View = nil;
@@ -39,31 +38,37 @@
 
 -(void)render
 {
-	if (![NSThread isMainThread]) {
-		TiThreadPerformOnMainThread(^{[self render];}, NO);
-		return;
-	}  	  
-	if (region.center.latitude!=0 && region.center.longitude!=0)
-	{
-		[map setRegion:[map regionThatFits:region] animated:animate];
-	}
+    if (![NSThread isMainThread]) {
+        TiThreadPerformOnMainThread(^{[self render];}, NO);
+        return;
+    }  	  
+    if (region.center.latitude!=0 && region.center.longitude!=0)
+    {
+        if (regionFits) {
+            [map setRegion:[map regionThatFits:region] animated:animate];
+        }
+        else {
+            [map setRegion:region animated:animate];
+        }
+    }
 }
 
 -(MKMapView*)map
 {
-	if (map==nil)
-	{
-		map = [[MKMapView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
-		map.delegate = self;
-		map.userInteractionEnabled = YES;
-		map.showsUserLocation = YES; // defaults
-		map.autoresizingMask = UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
-		[self addSubview:map];
-		mapLine2View = CFDictionaryCreateMutable(NULL, 10, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-		mapName2Line = CFDictionaryCreateMutable(NULL, 10, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-        
-	}
-	return map;
+    if (map==nil)
+    {
+        map = [[MKMapView alloc] initWithFrame:CGRectMake(0, 0, 100, 100)];
+        map.delegate = self;
+        map.userInteractionEnabled = YES;
+        map.showsUserLocation = YES; // defaults
+        map.autoresizingMask = UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
+        [self addSubview:map];
+        mapLine2View = CFDictionaryCreateMutable(NULL, 10, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        mapName2Line = CFDictionaryCreateMutable(NULL, 10, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        //Initialize loaded state to YES. This will automatically go to NO if the map needs to download new data
+        loaded = YES;
+    }
+    return map;
 }
 
 - (NSArray *)customAnnotations
@@ -86,8 +91,9 @@
 
 -(void)frameSizeChanged:(CGRect)frame bounds:(CGRect)bounds
 {
-	[TiUtils setView:[self map] positionRect:bounds];
+    [TiUtils setView:[self map] positionRect:bounds];
     [super frameSizeChanged:frame bounds:bounds];
+    [self render];
 }
 
 -(TiMapAnnotationProxy*)annotationFromArg:(id)arg
@@ -198,33 +204,13 @@
 	}
 }
 
--(void)flushPendingAnnotation
-{
-	if (pendingAnnotationSelection != nil) {
-		hitSelect = NO;
-		manualSelect = YES;
-		hitAnnotation = pendingAnnotationSelection;
-		[map selectAnnotation:pendingAnnotationSelection animated:animate];
-		if([map selectedAnnotations] != nil)
-		{
-			RELEASE_TO_NIL(pendingAnnotationSelection);
-		}
-	}
-}
 
--(void)selectOrSetPendingAnnotation:(id<MKAnnotation>)annotation
+-(void)setSelectedAnnotation:(id<MKAnnotation>)annotation
 {
-	if (loaded)
-	{
-		hitAnnotation = annotation;
-		hitSelect = NO;
-		manualSelect = YES;
-		[[self map] selectAnnotation:annotation animated:animate];
-	}
-	else {
-		[pendingAnnotationSelection release];
-		pendingAnnotationSelection = (TiMapAnnotationProxy*)[annotation retain];
-	}
+    hitAnnotation = annotation;
+    hitSelect = NO;
+    manualSelect = YES;
+    [[self map] selectAnnotation:annotation animated:animate];
 }
 
 -(void)selectAnnotation:(id)args
@@ -251,14 +237,14 @@
 			if ([title isEqualToString:an.title])
 			{
 				// TODO: Slide the view over to the selected annotation, and/or zoom so it's with all other selected.
-				[self selectOrSetPendingAnnotation:an];
+				[self setSelectedAnnotation:an];
 				break;
 			}
 		}
 	}
 	else if ([args isKindOfClass:[TiMapAnnotationProxy class]])
 	{
-		[self selectOrSetPendingAnnotation:args];
+		[self setSelectedAnnotation:args];
 	}
 }
 
@@ -275,24 +261,14 @@
 		{
 			if ([title isEqualToString:an.title])
 			{
-				if (loaded) {
-					[[self map] deselectAnnotation:an animated:animate];
-				}
-				else {
-					RELEASE_TO_NIL(pendingAnnotationSelection);
-				}
+				[[self map] deselectAnnotation:an animated:animate];
 				break;
 			}
 		}
 	}
 	else if ([args isKindOfClass:[TiMapAnnotationProxy class]])
 	{
-		if (loaded) {
-			[[self map] deselectAnnotation:args animated:animate];
-		}
-		else {
-			RELEASE_TO_NIL(pendingAnnotationSelection);
-		}
+		[[self map] deselectAnnotation:args animated:animate];
 	}
 }
 
@@ -340,12 +316,20 @@
 
 -(CLLocationDegrees) longitudeDelta
 {
-	return region.span.longitudeDelta;
+    if (loaded) {
+        MKCoordinateRegion _region = [[self map] region];
+        return _region.span.longitudeDelta;
+    }
+    return 0.0;
 }
 
 -(CLLocationDegrees) latitudeDelta
 {
-	return region.span.latitudeDelta;
+    if (loaded) {
+        MKCoordinateRegion _region = [[self map] region];
+        return _region.span.latitudeDelta;
+    }
+    return 0.0;
 }
 
 
@@ -376,18 +360,6 @@
 	else 
 	{
 		region = [self regionFromDict:value];
-		if (regionFits)
-		{
-			MKCoordinateRegion fitRegion = [[self map] regionThatFits:region];
-			// this seems to happen sometimes where we get an invalid span back
-			if (fitRegion.span.latitudeDelta == 0 || fitRegion.span.longitudeDelta == 0)
-			{
-				// this seems to happen when you try and call this with the same region
-				// which means we can ignore (otherwise you'll get an NSInvalidException
-				return;
-			}
-			region = fitRegion;
-		}
 		[self render];
 	}
 }
@@ -399,9 +371,8 @@
 
 -(void)setRegionFit_:(id)value
 {
-	id aregion = [self.proxy valueForKey:@"region"];
-	regionFits = [TiUtils boolValue:value];
-	[self setRegion_:aregion];
+    regionFits = [TiUtils boolValue:value];
+    [self render];
 }
 
 -(void)setUserLocation_:(id)value
@@ -521,8 +492,6 @@
 
 - (void)mapView:(MKMapView *)mapView regionDidChangeAnimated:(BOOL)animated
 {
-	[self flushPendingAnnotation];
-	
 	if ([self.proxy _hasListeners:@"regionChanged"])
 	{
 		region = [mapView region];
@@ -534,6 +503,18 @@
 								[NSNumber numberWithDouble:region.span.longitudeDelta],@"longitudeDelta",nil];
 		[self.proxy fireEvent:@"regionChanged" withObject:props];
 	}
+    //SELECT ANNOTATION WILL NOT ALWAYS WORK IF THE MAPVIEW IS ANIMATING.
+    //THIS FORCES A RESELCTION OF THE ANNOTATIONS WITHOUT SENDING OUT EVENTS
+    //SEE TIMOB-8431 (IOS 4.3)
+    ignoreClicks = YES;
+    NSArray* currentSelectedAnnotations = [[mapView selectedAnnotations] retain];
+    for (id annotation in currentSelectedAnnotations) {
+        [mapView deselectAnnotation:annotation animated:NO];
+        [mapView selectAnnotation:annotation animated:NO];
+    }
+    [currentSelectedAnnotations release];
+    ignoreClicks = NO;
+     
 }
 
 - (void)mapViewWillStartLoadingMap:(MKMapView *)mapView
@@ -549,7 +530,6 @@
 {
 	ignoreClicks = YES;
 	loaded = YES;
-	[self flushPendingAnnotation];
 	if ([self.proxy _hasListeners:@"complete"])
 	{
 		[self.proxy fireEvent:@"complete" withObject:nil];
@@ -633,10 +613,6 @@
 // For MapKit provided annotations (eg. MKUserLocation) return nil to use the MapKit provided annotation view.
 - (MKAnnotationView *)mapView:(MKMapView *)mapView viewForAnnotation:(id <MKAnnotation>)annotation
 {
-	if(annotation == pendingAnnotationSelection)
-	{
-		[self performSelector:@selector(flushPendingAnnotation) withObject:nil afterDelay:0.0];
-	}
 	if ([annotation isKindOfClass:[TiMapAnnotationProxy class]])
 	{
 		TiMapAnnotationProxy *ann = (TiMapAnnotationProxy*)annotation;

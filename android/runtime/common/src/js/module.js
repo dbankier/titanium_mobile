@@ -144,7 +144,6 @@ Module.prototype.loadExternalModule = function(id, externalBinding, context) {
 		if (bindingKey) {
 			externalModule = externalBinding[bindingKey];
 		}
-
 		return externalModule;
 
 	} else {
@@ -198,19 +197,23 @@ Module.prototype.require = function (request, context, useCache) {
 		return this.loadExternalModule(request, externalBinding, context);
 	}
   
-  var id, filename;
+  var id, filename = request, isExternalCommonJs = false;
   // [TiShadow] Cowboy loading if using an appdata url
   if (request.indexOf("/data/data") === 0 ) {
     id = filename = request;
   } else {
-	  var resolved = resolveFilename(request, this);
-	  id = resolved[0];
-  	filename = resolved[1];
+	  isExternalCommonJs = kroll.isExternalCommonJsModule(request);
+
+	  if (!isExternalCommonJs) {
+		  var resolved = resolveFilename(request, this);
+		  id = resolved[0];
+		  filename = resolved[1];
+		}
   }
 
-	if (kroll.DBG) {
+  if (kroll.DBG) {
 		kroll.log(TAG, 'Loading module: ' + request + ' -> ' + filename);
-	}
+  }
 
   // [TiShadow] don't cache TiShadow modules
 	if (useCache && (request.indexOf("/data/data") === -1 )) {
@@ -222,7 +225,12 @@ Module.prototype.require = function (request, context, useCache) {
 
 	// Create and attempt to load the module.
 	var module = new Module(id, this, context);
-	module.load(filename);
+
+	if (isExternalCommonJs) {
+		module.load(filename, kroll.getExternalCommonJsModule(filename));
+	} else {
+		module.load(filename);
+	}
 
    // [TiShadow] don't cache TiShadow modules
 	if (useCache && (request.indexOf("/data/data") === -1 )) {

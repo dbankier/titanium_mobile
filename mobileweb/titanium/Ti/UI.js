@@ -16,7 +16,8 @@ define(
 			Ti.UI._recalculateLayout();
 			hidingAddressBar = 0;
 		},
-		undef;
+		unitize = dom.unitize,
+		showStats = false;
 
 	on(body, "touchmove", function(e) {
 		e.preventDefault();
@@ -24,8 +25,7 @@ define(
 
 	require.each(modules.split(','), function(name) {
 		creators['create' + name] = function(args) {
-			var m = require("Ti/UI/" + name);
-			return new m(args);
+			return new (require("Ti/UI/" + name))(args);
 		};
 	});
 
@@ -71,12 +71,27 @@ define(
 	}
 
 	ready(10, function() {
-		var node = (Ti.UI._container = Ti.UI.createView({
-			left: 0,
-			top: 0
-		})).domNode;
+		var splashScreen = document.getElementById("splash"),
+			container = (Ti.UI._container = Ti.UI.createView({
+				left: 0,
+				top: 0
+			})),
+			node = container.domNode;
 		setStyle(node, "overflow", "hidden");
 		body.appendChild(node);
+		container.addEventListener("postlayout", function(){
+			setTimeout(function(){
+				setStyle(splashScreen,{
+					position: "absolute",
+					width: unitize(container._measuredWidth),
+					height: unitize(container._measuredHeight),
+					left: "0px",
+					top: "0px",
+					right: "",
+					bottom: ""
+				});
+			},10);
+		});
 		hideAddressBar();
 	});
 	
@@ -143,7 +158,8 @@ define(
 					child,
 					recursionStack,
 					rootNodesToLayout = [],
-					layoutRootNode = false;
+					layoutRootNode = false,
+					breakAfterChildrenCalculations;
 					
 				// Determine which nodes need to be re-layed out
 				for (var i in nodes) {
@@ -157,7 +173,7 @@ define(
 						children = node.children;
 						for (var j in children) {
 							child = children[j];
-							if (node.layout !== "composite" || child._isDependentOnParent || !child._hasBeenLayedOut) {
+							if (node.layout !== "composite" || child._isDependentOnParent() || !child._hasBeenLayedOut) {
 								recursionStack.push(child);
 							}
 						}
@@ -166,12 +182,17 @@ define(
 					// Go up and mark any other nodes that need to be marked
 					parent = layoutNode;
 					while(1) {
+						breakAfterChildrenCalculations = false;
 						if (!parent._parent) {
 							layoutRootNode = true;
 							break;
 						} else if(!parent._parent._hasSizeDimensions()) {
-							!parent._parent._markedForLayout && rootNodesToLayout.push(parent._parent);
-							break;
+							!parent._parent._markedForLayout && !~rootNodesToLayout.indexOf(parent._parent) && rootNodesToLayout.push(parent._parent);
+							if (parent._parent.layout !== "composite") {
+								breakAfterChildrenCalculations = true;
+							} else {
+								break;
+							}
 						}
 						
 						previousParent = parent;
@@ -182,11 +203,14 @@ define(
 							children = node.children;
 							for (var j in children) {
 								child = children[j];
-								if (child !== previousParent && (node.layout !== "composite" || child._isDependentOnParent)) {
+								if (child !== previousParent && (node.layout !== "composite" || child._isDependentOnParent())) {
 									child._markedForLayout = true;
 									recursionStack.push(child);
 								}
 							}
+						}
+						if (breakAfterChildrenCalculations) {
+							break;
 						}
 					}
 				}
@@ -217,15 +241,17 @@ define(
 				}
 				for (var i in rootNodesToLayout) {
 					node = rootNodesToLayout[i];
-					node._layout._doLayout(node, node._measuredWidth, node._measuredHeight, node.width === Ti.UI.SIZE, node.height === Ti.UI.SIZE);
+					node._layout._doLayout(node, node._measuredWidth, node._measuredHeight, node._getInheritedWidth() === Ti.UI.SIZE, node._getInheritedHeight() === Ti.UI.SIZE);
 				}
 				
-				//console.debug("Layout " + self._layoutCount + ": " + self._elementLayoutCount + 
-				//	" elements laid out in " + ((new Date().getTime() - startTime)) + "ms");
+				showStats && console.debug("Layout " + self._layoutCount + ": " + self._elementLayoutCount + 
+					" elements laid out in " + ((new Date().getTime() - startTime)) + "ms");
 					
 				self._layoutInProgress = false;
 				self._layoutTimer = null;
 				self._nodesToLayout = [];
+				
+				self.fireEvent("postlayout");
 			}
 			if (force) {
 				clearTimeout(self._layoutTimer);
@@ -256,7 +282,7 @@ define(
 					return setStyle(body, "backgroundImage", value ? style.url(value) : "");
 				}
 			},
-			currentTab: undef
+			currentTab: void 0
 		},
 		
 		convertUnits: function(convertFromValue, convertToUnits) {
@@ -277,7 +303,7 @@ define(
 		},
 
 		constants: {
-			currentWindow: undefined,
+			currentWindow: void 0,
 			UNKNOWN: 0,
 			FACE_DOWN: 1,
 			FACE_UP: 2,
