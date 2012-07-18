@@ -769,10 +769,11 @@ CFMutableSetRef	krollBridgeRegistry = nil;
 	TiModule* module = nil;
 	NSData *data = nil;
 	NSString *filepath = nil;
-	
+    
 	// first check to see if we've already loaded the module
 	// and if so, return it
-	if (modules!=nil)
+    // [TiShadow] don't cache TiShadow modules
+	if (modules!=nil && ![path hasPrefix:@"file:"])
 	{
 		module = [modules objectForKey:path];
 		if (module!=nil)
@@ -811,7 +812,13 @@ CFMutableSetRef	krollBridgeRegistry = nil;
 	if (data==nil)
 	{
 		filepath = [NSString stringWithFormat:@"%@.js",path];
-		NSURL *url_ = [TiHost resourceBasedURL:filepath baseURL:NULL];
+        NSURL *url_;
+        //[TiShadow] for applicationDataDirectory loading
+        if (![filepath hasPrefix:@"file:"]) {
+			url_ = [TiHost resourceBasedURL:filepath baseURL:NULL];
+		} else {
+			url_ = [NSURL URLWithString:filepath];
+		}
 		data = [TiUtils loadAppResource:url_];
 		if (data==nil)
 		{
@@ -823,7 +830,13 @@ CFMutableSetRef	krollBridgeRegistry = nil;
 	if (data!=nil)
 	{
         NSString* urlPath = (filepath != nil) ? filepath : path;
-		NSURL *url_ = [TiHost resourceBasedURL:urlPath baseURL:NULL];
+        NSURL *url_;
+        //[TiShadow] for applicationDataDirectory loading
+        if (![urlPath hasPrefix:@"file:"]) {
+			url_ = [TiHost resourceBasedURL:urlPath baseURL:NULL];
+		} else {
+			url_ = [NSURL URLWithString:urlPath];
+		}
        	const char *urlCString = [[url_ absoluteString] UTF8String];
         KrollWrapper* wrapper = nil;
         
@@ -847,7 +860,10 @@ CFMutableSetRef	krollBridgeRegistry = nil;
         if (module == nil) {
             module = (id)wrapper;
             
-            [modules setObject:module forKey:path];
+            // [TiShadow] don't cache TiShadow modules
+            if (![urlPath hasPrefix:@"file:"]) {
+                [modules setObject:module forKey:path];
+            }
             if (filepath!=nil && module!=nil)
             {
                 // uri is optional but we point it to where we loaded it

@@ -217,14 +217,29 @@ Module.prototype.require = function (request, context, useCache) {
 		return this.loadExternalModule(request, externalBinding, context);
 	}
 
-	var resolved = resolveFilename(request, this);
-	var id = resolved[0];
-	var filename = resolved[1];
+  
+  var id, filename;
+  // [TiShadow] Cowboy loading if using an appdata url
+  // need to still support /data/data (legecy TiShadow use)
+  var isNonResource = request.indexOf("/data/data") === 0 || request.indexOf("appdata-private") === 0; 
+  if (isNonResource) {
+      if (request.indexOf("appdata-private") === 0 ) {
+        id = filename = request + ".js"
+      } else { // legacy /data/data usage
+        id = filename = request;
+      }
+  } else {
+	  var resolved = resolveFilename(request, this);
+	  id = resolved[0];
+  	  filename = resolved[1];
+  }
+
 	if (kroll.DBG) {
 		kroll.log(TAG, 'Loading module: ' + request + ' -> ' + filename);
 	}
 
-	if (useCache) {
+  // [TiShadow] don't cache TiShadow modules
+	if (useCache && !isNonResource) {
 		var cachedModule = Module.cache[filename];
 		if (cachedModule) {
 			return cachedModule.exports;
@@ -236,7 +251,8 @@ Module.prototype.require = function (request, context, useCache) {
 
 	module.load(filename);
 
-	if (useCache) {
+   // [TiShadow] don't cache TiShadow modules
+	if (useCache && !isNonResource) {
 		// Cache the module for future requests.
 		Module.cache[filename] = module;
 	}

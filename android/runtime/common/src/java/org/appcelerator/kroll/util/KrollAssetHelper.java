@@ -23,7 +23,7 @@ public class KrollAssetHelper
 {
 	private static final String TAG = "TiAssetHelper";
 	private static WeakReference<AssetManager> manager;
-	private static String packageName, cacheDir;
+	private static String packageName, cacheDir, dataDir;
 	private static AssetCrypt assetCrypt;
 
 	public interface AssetCrypt
@@ -41,6 +41,7 @@ public class KrollAssetHelper
 		KrollAssetHelper.manager = new WeakReference<AssetManager>(context.getAssets());
 		KrollAssetHelper.packageName = context.getPackageName();
 		KrollAssetHelper.cacheDir = context.getCacheDir().getAbsolutePath();
+    KrollAssetHelper.dataDir = context.getDir("appdata", 0).getAbsolutePath();
 	}
 
 	public static String readAsset(String path)
@@ -67,14 +68,21 @@ public class KrollAssetHelper
 			}
 		}
 
-		try {
+		try { 
 			AssetManager assetManager = manager.get();
 			if (assetManager == null) {
 				Log.e(TAG, "AssetManager is null, can't read asset: " + path);
 				return null;
 			}
-
-			InputStream in = assetManager.open(path);
+      InputStream in;
+      //[TiShadow] for loading from private data
+      if (path.startsWith("appdata-private://")) {
+        in = new FileInputStream(dataDir + path.substring(18));
+      } else if (path.startsWith("/data/data")) {
+        in = new FileInputStream(path);
+      } else {
+			  in = assetManager.open(path);
+      }
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			byte buffer[] = new byte[1024];
 			int count = 0;
