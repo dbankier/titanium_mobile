@@ -34,6 +34,7 @@ import org.appcelerator.titanium.view.TiGradientDrawable.GradientType;
 
 import android.content.Context;
 import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
@@ -51,6 +52,7 @@ import android.view.View.OnKeyListener;
 import android.view.View.OnLongClickListener;
 import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.animation.Animation;
 import android.view.animation.AnimationSet;
 import android.view.inputmethod.InputMethodManager;
@@ -90,7 +92,7 @@ public abstract class TiUIView
 	// rather than starting the next animation always from scale 1.0f (i.e., normal scale).
 	// This gives us parity with iPhone for scale animations that use the 2-argument variant
 	// of Ti2DMatrix.scale().
-	private Pair<Float, Float> animatedScaleValues = Pair.create(new Float(1f), new Float(1f)); // default = full size (1f)
+	private Pair<Float, Float> animatedScaleValues = Pair.create(Float.valueOf(1f), Float.valueOf(1f)); // default = full size (1f)
 
 	// Same for rotation animation.
 	private float animatedRotationDegrees = 0f; // i.e., no rotation.
@@ -245,15 +247,64 @@ public abstract class TiUIView
 	 */
 	public void animate()
 	{
-		TiAnimationBuilder builder = proxy.getPendingAnimation();
-		if (builder != null && nativeView != null) {
-			AnimationSet as = builder.render(proxy, nativeView);
-			if (DBG) {
-				Log.d(LCAT, "starting animation: "+as);
+		if (nativeView == null) {
+			return;
+		}
+
+		// Pre-honeycomb, if one animation clobbers another you get a problem whereby the background of the
+		// animated view's parent (or the grandparent) bleeds through.  It seems to improve if you cancel and clear
+		// the older animation.  So here we cancel and clear, then re-queue the desired animation.
+		if (Build.VERSION.SDK_INT < TiC.API_LEVEL_HONEYCOMB) {
+			Animation currentAnimation = nativeView.getAnimation();
+			if (currentAnimation != null && currentAnimation.hasStarted() && !currentAnimation.hasEnded()) {
+				// Cancel existing animation and
+				// re-queue desired animation.
+				currentAnimation.cancel();
+				nativeView.clearAnimation();
+				proxy.handlePendingAnimation(true);
+				return;
 			}
-			nativeView.startAnimation(as);
-			// Clean up proxy
-			proxy.clearAnimation(builder);
+
+		}
+
+		TiAnimationBuilder builder = proxy.getPendingAnimation();
+		if (builder == null) {
+			return;
+		}
+
+		proxy.clearAnimation(builder);
+		AnimationSet as = builder.render(proxy, nativeView);
+
+		// If a view is "visible" but not currently seen (such as because it's covered or
+		// its position is currently set to be fully outside its parent's region),
+		// then Android might not animate it immediately because by default it animates
+		// "on first frame" and apparently "first frame" won't happen right away if the
+		// view has no visible rectangle on screen.  In that case invalidate its parent, which will
+		// kick off the pending animation.
+		boolean invalidateParent = false;
+		ViewParent viewParent = nativeView.getParent();
+
+		if (nativeView.getVisibility() == View.VISIBLE && viewParent instanceof View) {
+			int width = nativeView.getWidth();
+			int height = nativeView.getHeight();
+
+			if (width == 0 || height == 0) {
+				// Could be animating from nothing to something
+				invalidateParent = true;
+			} else {
+				Rect r = new Rect(0, 0, width, height);
+				Point p = new Point(0, 0);
+				invalidateParent = !(viewParent.getChildVisibleRect(nativeView, r, p));
+			}
+		}
+
+		if (DBG) {
+			Log.d(LCAT, "starting animation: " + as);
+		}
+		nativeView.startAnimation(as);
+
+		if (invalidateParent) {
+			((View) viewParent).postInvalidate();
 		}
 	}
 
@@ -408,12 +459,16 @@ public abstract class TiUIView
 		} else if (key.equals(TiC.PROPERTY_HEIGHT)) {
 			resetPostAnimationValues();
 			if (newValue != null) {
-				if (!newValue.equals(TiC.SIZE_AUTO)) {
-					layoutParams.optionHeight = TiConvert.toTiDimension(TiConvert.toString(newValue), TiDimension.TYPE_HEIGHT);
+				layoutParams.optionHeight = null;
+				layoutParams.sizeOrFillHeightEnabled = true;
+				if (newValue.equals(TiC.LAYOUT_SIZE)) {
+					layoutParams.autoFillsHeight = false;
+				} else if (newValue.equals(TiC.LAYOUT_FILL)) {
+					layoutParams.autoFillsHeight = true;
+				} else if (!newValue.equals(TiC.SIZE_AUTO)) {
+					layoutParams.optionHeight = TiConvert.toTiDimension(TiConvert.toString(newValue),
+						TiDimension.TYPE_HEIGHT);
 					layoutParams.sizeOrFillHeightEnabled = false;
-				} else {
-					layoutParams.optionHeight = null;
-					layoutParams.sizeOrFillHeightEnabled = true;
 				}
 			} else {
 				layoutParams.optionHeight = null;
@@ -427,12 +482,15 @@ public abstract class TiUIView
 		} else if (key.equals(TiC.PROPERTY_WIDTH)) {
 			resetPostAnimationValues();
 			if (newValue != null) {
-				if (!newValue.equals(TiC.SIZE_AUTO)) {
+				layoutParams.optionWidth = null;
+				layoutParams.sizeOrFillWidthEnabled = true;
+				if (newValue.equals(TiC.LAYOUT_SIZE)) {
+					layoutParams.autoFillsWidth = false;
+				} else if (newValue.equals(TiC.LAYOUT_FILL)) {
+					layoutParams.autoFillsWidth = true;
+				} else if (!newValue.equals(TiC.SIZE_AUTO)) {
 					layoutParams.optionWidth = TiConvert.toTiDimension(TiConvert.toString(newValue), TiDimension.TYPE_WIDTH);
 					layoutParams.sizeOrFillWidthEnabled = false;
-				} else {
-					layoutParams.optionWidth = null;
-					layoutParams.sizeOrFillWidthEnabled = true;
 				}
 			} else {
 				layoutParams.optionWidth = null;
@@ -1295,7 +1353,6 @@ public abstract class TiUIView
 	/**
 	 * Store the animated x and y scale values (i.e., the scale after an animation)
 	 * since Android provides no property for looking them up.
-	 * looking it up.
 	 */
 	public void setAnimatedScaleValues(Pair<Float, Float> newValues)
 	{
@@ -1327,4 +1384,5 @@ public abstract class TiUIView
 		animatedRotationDegrees = 0f; // i.e., no rotation.
 		animatedScaleValues = Pair.create(Float.valueOf(1f), Float.valueOf(1f)); // 1 means no scaling
 	}
+
 }
