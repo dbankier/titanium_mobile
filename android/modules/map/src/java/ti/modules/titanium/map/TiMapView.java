@@ -107,6 +107,8 @@ public class TiMapView extends TiUIView
 		private int lastLatitude;
 		private int lastLatitudeSpan;
 		private int lastLongitudeSpan;
+		private boolean requestViewOnScreen = false;
+		private View view;
 
 		public LocalMapView(Context context, String apiKey)
 		{
@@ -159,8 +161,47 @@ public class TiMapView extends TiUIView
 				proxy.fireEvent(TiC.EVENT_REGION_CHANGED, location);
 			}
 		}
-	}
 
+		@Override
+		protected void onLayout(boolean changed, int left, int top, int right, int bottom)
+		{
+			super.onLayout(changed, left, top, right, bottom);
+
+			if (requestViewOnScreen) {
+				View child;
+				for (int i = 0; i < getChildCount(); i++) {
+					child = getChildAt(i);
+					if (child == view) {
+						int childLeft = child.getLeft();
+						int childRight = child.getRight();
+						int childTop = child.getTop();
+						int parentWidth = right - left;
+						if (childLeft > 0 && childTop > 0 && childRight < parentWidth) {
+							requestViewOnScreen = false;
+							return;
+						}
+						if (childLeft > 0 && childRight > parentWidth) {
+							getController().scrollBy(Math.min(childLeft, (childRight - parentWidth)), Math.min(0, childTop));
+							requestViewOnScreen = false;
+							return;
+						}
+						getController().scrollBy(Math.min(0, childLeft), Math.min(0, childTop));
+						requestViewOnScreen = false;
+						return;
+					}
+				}
+				requestViewOnScreen = false;
+			}
+		}
+
+		public void requestViewOnScreen(View v)
+		{
+			if (v != null) {
+				requestViewOnScreen = true;
+				view = v;
+			}
+		}
+	}
 	
 	class TitaniumOverlay extends ItemizedOverlay<TiOverlayItem>
 	{
@@ -310,15 +351,17 @@ public class TiMapView extends TiUIView
 	
 	public static class SelectedAnnotation
 	{
+		AnnotationProxy selectedAnnotation;
 		String title;
 		boolean animate;
 		boolean center;
 
-		public SelectedAnnotation(String title, boolean animate, boolean center)
+		public SelectedAnnotation(String title, AnnotationProxy selectedAnnotation, boolean animate, boolean center)
 		{
 			this.title = title;
 			this.animate = animate;
 			this.center = center;
+			this.selectedAnnotation = selectedAnnotation;
 		}
 	}
 	
@@ -474,12 +517,14 @@ public class TiMapView extends TiUIView
 				return true;
 
 			case MSG_SELECT_ANNOTATION :
-				Bundle args = msg.getData();
-				boolean select = args.getBoolean("select", false);
+				KrollDict args = (KrollDict) msg.obj;
+				
+				boolean select = args.optBoolean("select", false);
 				String title = args.getString("title");
-				boolean animate = args.getBoolean("animate", false);
-				boolean center = args.getBoolean("center", true); // keep existing default behavior
-				doSelectAnnotation(select, title, animate, center);
+				boolean animate = args.optBoolean("animate", false);
+				boolean center = args.optBoolean("center", true); // keep existing default behavior
+				AnnotationProxy annotation = (AnnotationProxy)args.get("annotation");
+				doSelectAnnotation(select, title, annotation, animate, center);
 				return true;
 
 			case MSG_UPDATE_ANNOTATIONS :
@@ -512,6 +557,7 @@ public class TiMapView extends TiUIView
 					LayoutParams.WRAP_CONTENT, item.getPoint(), 0, y, MapView.LayoutParams.BOTTOM_CENTER);
 			params.mode = MapView.LayoutParams.MODE_MAP;
 
+			view.requestViewOnScreen(itemView);
 			view.addView(itemView, params);
 		}
 	}
@@ -789,7 +835,7 @@ public class TiMapView extends TiUIView
 						if (DBG) {
 							Log.d(LCAT, "Executing internal call to selectAnnotation:" + annotation.title);
 						}
-						selectAnnotation(true, annotation.title, annotation.animate, annotation.center);
+						selectAnnotation(true, annotation.title, annotation.selectedAnnotation, annotation.animate, annotation.center);
 					}
 				}
 
@@ -798,27 +844,29 @@ public class TiMapView extends TiUIView
 		}
 	}
 
-	public void selectAnnotation(boolean select, String title, boolean animate, boolean center)
+	public void selectAnnotation(boolean select, String title, AnnotationProxy selectedAnnotation, boolean animate, boolean center)
 	{
 		if (title != null) {
 			Log.e(LCAT, "calling obtainMessage");
-
-			Bundle args = new Bundle();
-			args.putBoolean("select", select);
-			args.putString("title", title);
-			args.putBoolean("animate", animate);
-			args.putBoolean("center", center);
-
+			
+			KrollDict args = new KrollDict();
+			args.put("select", new Boolean(select));
+			args.put("title", title);
+			args.put("animate", new Boolean(animate));
+			args.put("center", new Boolean(center));
+			if (selectedAnnotation != null) {
+				args.put("annotation", selectedAnnotation);
+			}
 			Message message = handler.obtainMessage(MSG_SELECT_ANNOTATION);
-			message.setData(args);
+			message.obj = args;
 			message.sendToTarget();
 		}
 	}
 
-	public void doSelectAnnotation(boolean select, String title, boolean animate, boolean center)
+	public void doSelectAnnotation(boolean select, String title, AnnotationProxy annotation, boolean animate, boolean center)
 	{
 		if (title != null && view != null && annotations != null && overlay != null) {
-			int index = ((ViewProxy)proxy).findAnnotation(title);
+			int index = ((ViewProxy)proxy).findAnnotation(title, annotation);
 			if (index > -1) {
 				if (overlay != null) {
 					synchronized(overlay) {

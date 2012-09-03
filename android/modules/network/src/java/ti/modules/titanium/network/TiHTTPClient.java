@@ -6,6 +6,7 @@
  */
 package ti.modules.titanium.network;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -55,6 +56,8 @@ import org.apache.http.conn.scheme.SchemeRegistry;
 import org.apache.http.conn.ssl.SSLSocketFactory;
 import org.apache.http.cookie.Cookie;
 import org.apache.http.entity.AbstractHttpEntity;
+import org.apache.http.entity.ByteArrayEntity;
+import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.MultipartEntity;
 import org.apache.http.entity.mime.content.ContentBody;
@@ -131,7 +134,7 @@ public class TiHTTPClient
 	private long maxBufferSize;
 	private ArrayList<NameValuePair> nvPairs;
 	private HashMap<String, ContentBody> parts;
-	private String data;
+	private Object data;
 	private boolean needMultipart;
 	private Thread clientThread;
 	private boolean aborted;
@@ -140,6 +143,7 @@ public class TiHTTPClient
 	private boolean autoRedirect = true;
 	private Uri uri;
 	private String url;
+	private ArrayList<File> tmpFiles = new ArrayList<File>();
 
 	protected HashMap<String,String> headers = new HashMap<String,String>();
 
@@ -764,7 +768,8 @@ public class TiHTTPClient
 		// if the url is not prepended with either http or 
 		// https, then default to http and prepend the protocol
 		// to the url
-		if (!url.startsWith("http://") && !url.startsWith("https://")) {
+		String lowerCaseUrl = url.toLowerCase();
+		if (!lowerCaseUrl.startsWith("http://") && !lowerCaseUrl.startsWith("https://")) {
 			url = "http://" + url;
 		}
 
@@ -839,7 +844,7 @@ public class TiHTTPClient
 		}
 	}
 
-	public void addStringData(String data)
+	public void setRawData(Object data)
 	{
 		this.data = data;
 	}
@@ -867,7 +872,7 @@ public class TiHTTPClient
 		}
 	}
 
-	public int addTitaniumFileAsPostData(String name, Object value)
+	private int addTitaniumFileAsPostData(String name, Object value)
 	{
 		try {
 			// TiResourceFile cannot use the FileBody approach directly, because it requires
@@ -892,7 +897,9 @@ public class TiHTTPClient
 				FileOutputStream fos = new FileOutputStream(tmpFile);
 				fos.write(blob.getBytes());
 				fos.close();
-				
+
+				tmpFiles.add(tmpFile);
+
 				FileBody body = new FileBody(tmpFile, mimeType);
 				parts.put(name, body);
 				return blob.getLength();
@@ -910,6 +917,34 @@ public class TiHTTPClient
 			Log.e(LCAT, "Error adding post data ("+name+"): " + e.getMessage());
 		}
 		return 0;
+	}
+	
+	private Object titaniumFileAsPutData(Object value)
+	{
+		if (value instanceof TiBaseFile && !(value instanceof TiResourceFile)) {
+			TiBaseFile baseFile = (TiBaseFile) value;
+			return new FileEntity(baseFile.getNativeFile(), TiMimeTypeHelper.getMimeType(baseFile.nativePath()));
+		} else if (value instanceof TiBlob || value instanceof TiResourceFile) {
+			try {
+				TiBlob blob;
+				if (value instanceof TiBlob) {
+					blob = (TiBlob) value;
+				} else {
+					blob = ((TiResourceFile) value).read();
+				}
+				String mimeType = blob.getMimeType();
+				File tmpFile = File.createTempFile("tixhr", "." + TiMimeTypeHelper.getFileExtensionFromMimeType(mimeType, "txt"));
+				FileOutputStream fos = new FileOutputStream(tmpFile);
+				fos.write(blob.getBytes());
+				fos.close();
+		
+				tmpFiles.add(tmpFile);
+				return new FileEntity(tmpFile, mimeType);
+			} catch (IOException e) {
+				Log.e(LCAT, "Error adding put data: " + e.getMessage());
+			}
+		}
+		return value;
 	}
 
 	protected DefaultHttpClient createClient()
@@ -964,7 +999,7 @@ public class TiHTTPClient
 				HashMap<String, Object> data = (HashMap) userData;
 				boolean isPostOrPut = method.equals("POST") || method.equals("PUT");
 				boolean isGet = !isPostOrPut && method.equals("GET");
-								
+
 				// first time through check if we need multipart for POST
 				for (String key : data.keySet()) {
 					Object value = data.get(key);
@@ -1010,9 +1045,18 @@ public class TiHTTPClient
 				if (queryStringAltered) {
 					this.url = uri.toString();
 				}
-
+			} else if (userData instanceof TiFileProxy || userData instanceof TiBaseFile || userData instanceof TiBlob) {
+				Object value = userData;
+				if (value instanceof TiFileProxy) {
+					value = ((TiFileProxy) value).getBaseFile();
+				}
+				if (value instanceof TiBaseFile || value instanceof TiBlob) {
+					setRawData(titaniumFileAsPutData(value));
+				} else {
+					setRawData(TiConvert.toString(value));
+				}
 			} else {
-				addStringData(TiConvert.toString(userData));
+				setRawData(TiConvert.toString(userData));
 			}
 		}
 
@@ -1178,21 +1222,36 @@ public class TiHTTPClient
 				Log.e(LCAT, "HTTP Error (" + t.getClass().getName() + "): " + msg, t);
 				sendError(msg);
 			}
+
+			deleteTmpFiles();
 		}
 	}
-	
+
+	private void deleteTmpFiles()
+	{
+		if (tmpFiles.isEmpty()) {
+			return;
+		}
+
+		for (File tmpFile : tmpFiles) {
+			tmpFile.delete();
+		}
+		tmpFiles.clear();
+	}
+
 	private void handleURLEncodedData(UrlEncodedFormEntity form)
 	{
 		AbstractHttpEntity entity = null;
-		if (data != null) {
+		if (data instanceof String) {
 			try {
-				entity = new StringEntity(data, "UTF-8");
+				entity = new StringEntity((String) data, "UTF-8");
 
 			} catch(Exception ex) {
 				//FIXME
 				Log.e(LCAT, "Exception, implement recovery: ", ex);
 			}
-
+		} else if (data instanceof AbstractHttpEntity) {
+			entity = (AbstractHttpEntity) data;
 		} else {
 			entity = form;
 		}
