@@ -77,7 +77,7 @@ public class KrollAssetHelper
       InputStream in;
       //[TiShadow] for loading from private data
       if (path.startsWith("appdata-private://")) {
-        in = new FileInputStream(dataDir + path.substring(18));
+        in = new FileInputStream(dataDir + path.substring(17));
       } else if (path.startsWith("/data/data")) {
         in = new FileInputStream(path);
       } else {
