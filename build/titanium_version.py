@@ -1,2 +1,2 @@
-version = 'tishadow_2.1.2'
+version = 'tishadow_2.1.3'
 module_apiversion = '2'

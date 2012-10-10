@@ -344,7 +344,7 @@
 	
 	// WORKAROUND FOR APPLE BUG: 4.2 and lower don't like setting background color for grouped table views on iPad.
 	// So, we check the table style and device, and if they match up wrong, we replace the background view with our own.
-	if ([table style] == UITableViewStyleGrouped && [TiUtils isIPad]) {
+	if ([table style] == UITableViewStyleGrouped && ([TiUtils isIPad] || [TiUtils isIOS6OrGreater])) {
 		UIView* bgView = [[[UIView alloc] initWithFrame:[table frame]] autorelease];
 		[table setBackgroundView:bgView];
 	}
@@ -1981,7 +1981,13 @@ return result;	\
 		}
 	}
 	UIColor * cellColor = [Webcolor webColorNamed:color];
-	cell.backgroundColor = (cellColor != nil)?cellColor:[UIColor whiteColor];
+	if (cellColor == nil) {
+		cellColor = [UIColor whiteColor];
+	}
+	cell.backgroundColor = cellColor;
+	if(CGColorGetAlpha([cellColor CGColor])<1.0) {
+		[[cell textLabel] setBackgroundColor:[UIColor clearColor]];
+	}
 }
 
 - (NSString *)tableView:(UITableView *)ourTableView titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath
